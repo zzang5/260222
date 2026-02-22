@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from io import StringIO
 import warnings
+import os
+import pathlib
 warnings.filterwarnings("ignore")
 
 # ═══════════════════════════════════════════════════════
@@ -112,20 +114,32 @@ SUNEUNG = {
 # ═══════════════════════════════════════════════════════
 #  데이터 로드 함수
 # ═══════════════════════════════════════════════════════
-BUILTIN_FILE = "20260122_temp.csv"
+# app.py 가 있는 폴더 기준으로 절대 경로 설정 → Streamlit Cloud에서도 안정적으로 동작
+_HERE = pathlib.Path(__file__).parent.resolve()
+BUILTIN_FILE = _HERE / "20260122_temp.csv"
 
 @st.cache_data(show_spinner="📂 기본 데이터 로딩 중…")
 def load_builtin():
-    try:
-        df = pd.read_csv(
-            BUILTIN_FILE, encoding="euc-kr", header=0,
-            names=["날짜","지점","평균기온","최저기온","최고기온"],
-            skipinitialspace=True,
+    if not BUILTIN_FILE.exists():
+        st.error(
+            f"⚠️ 기본 데이터 파일을 찾을 수 없습니다.\n\n"
+            f"**찾는 경로:** `{BUILTIN_FILE}`\n\n"
+            f"`20260122_temp.csv` 파일을 `app.py` 와 **같은 폴더**에 넣어 주세요."
         )
-    except FileNotFoundError:
-        st.error(f"기본 데이터 파일({BUILTIN_FILE})을 찾을 수 없습니다.")
         return None
-    return _clean(df)
+    # EUC-KR → UTF-8 순으로 인코딩 시도
+    for enc in ["euc-kr", "cp949", "utf-8", "utf-8-sig"]:
+        try:
+            df = pd.read_csv(
+                BUILTIN_FILE, encoding=enc, header=0,
+                names=["날짜","지점","평균기온","최저기온","최고기온"],
+                skipinitialspace=True,
+            )
+            return _clean(df)
+        except (UnicodeDecodeError, Exception):
+            continue
+    st.error("기본 데이터 파일의 인코딩을 인식할 수 없습니다.")
+    return None
 
 def load_uploaded(file):
     raw = file.read()
